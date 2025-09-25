@@ -14,14 +14,19 @@ export class ContactsController {
     return this.contactsService.findAll(query);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.contactsService.findOne(id);
-  }
-
   @Get(':id/consents')
   findConsents(@Param('id') id: string) {
     return this.contactsService.getConsents(id);
+  }
+
+  @Get(':id/export')
+  exportContact(@Param('id') id: string) {
+    return this.contactsService.exportContact(id);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.contactsService.findOne(id);
   }
 
   @Post(':id/consents')
