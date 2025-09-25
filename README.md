@@ -65,6 +65,20 @@ pnpm dev
 - API: http://localhost:3001/api
 - WebSocket: ws://localhost:3001
 
+### Exponer la API hacia WhatsApp Cloud / Webhooks
+
+Si necesitas publicar temporalmente la API durante el desarrollo, puedes abrir un túnel seguro apuntando al puerto `3001`:
+
+```bash
+# LocalTunnel
+npx localtunnel --port 3001 --subdomain tucrm
+
+# o usando Cloudflare Tunnel
+cloudflared tunnel --url http://localhost:3001
+```
+
+Actualiza las URLs de webhook en Meta Developers con el dominio generado para recibir eventos entrantes.
+
 ## Scripts principales
 
 - `pnpm dev`: arranca `apps/web` y `apps/api` en modo desarrollo.

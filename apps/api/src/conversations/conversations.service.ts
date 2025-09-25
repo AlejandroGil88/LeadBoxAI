@@ -1,80 +1,150 @@
-import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { SeedMessageDto } from './dto/seed-message.dto';
-
-const conversations = [
-  {
-    id: 'conv_1',
-    contact: { id: 'contact_1', name: 'María López', phone: '+521234567890', locale: 'es' },
-    channel: 'whatsapp',
-    status: 'open',
-    lastMessage: 'Hola, ¿cómo avanzo con la inscripción?',
-    updatedAt: new Date().toISOString(),
-    messages: [
-      {
-        id: 'msg_1',
-        direction: 'in',
-        body: 'Hola, ¿cómo avanzo con la inscripción?'
-      }
-    ]
+const CONVERSATION_BASE_INCLUDE = {
+  contact: {
+    select: {
+      id: true,
+      name: true,
+      phone_e164: true,
+      locale: true,
+      country: true,
+      tags: true
+    }
+  },
+  assignedTo: {
+    select: {
+      id: true,
+      name: true,
+      email: true
+    }
   }
-];
+} as const;
 
 @Injectable()
 export class ConversationsService {
-  findAll(_query: PaginationQueryDto) {
-    return conversations;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
-  findOne(id: string) {
-    return conversations.find((item) => item.id === id);
-  }
+  async findAll(query: PaginationQueryDto) {
+    const skip = query.skip ?? 0;
+    const take = Math.min(query.take ?? 25, 100);
 
-  seedMessage(payload: SeedMessageDto) {
-    const now = new Date().toISOString();
-    const message = {
-      id: `msg_${randomUUID()}`,
-      direction: 'in',
-      body: payload.body,
-      createdAt: now
-    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.conversation.findMany({
+        skip,
+        take,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          ...CONVERSATION_BASE_INCLUDE,
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              body: true,
+              direction: true,
+              channel: true,
+              createdAt: true,
+              lang_src: true,
+              lang_dest: true,
+              status: true
+            }
+          }
+        }
+      }),
+      this.prisma.conversation.count()
+    ]);
 
-    const existingConversation = conversations.find(
-      (item) => item.contact.phone === payload.contactPhone
-    );
-
-    if (existingConversation) {
-      existingConversation.lastMessage = payload.body;
-      existingConversation.updatedAt = now;
-      existingConversation.messages.push(message);
-
-      return {
-        conversationId: existingConversation.id,
-        message
-      };
-    }
-
-    const conversation = {
-      id: `conv_${randomUUID()}`,
-      contact: {
-        id: `contact_${randomUUID()}`,
-        name: payload.contactPhone,
-        phone: payload.contactPhone,
-        locale: 'es'
-      },
-      channel: 'whatsapp',
-      status: 'open',
-      lastMessage: payload.body,
-      updatedAt: now,
-      messages: [message]
-    };
-
-    conversations.push(conversation);
+    const data = rows.map(({ messages, ...conversation }) => ({
+      ...conversation,
+      lastMessage: messages[0] ?? null
+    }));
 
     return {
-      conversationId: conversation.id,
-      message
+      data,
+      meta: {
+        total,
+        skip,
+        take
+      }
     };
+  }
+
+  async findOne(id: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        ...CONVERSATION_BASE_INCLUDE,
+        messages: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (!conversation) {
+      throw new NotFoundException(`Conversation ${id} not found`);
+    }
+
+    return conversation;
+  }
+
+  async seedMessage(payload: SeedMessageDto) {
+    const now = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      let contact = await tx.contact.findUnique({
+        where: { phone_e164: payload.contactPhone }
+      });
+
+      if (!contact) {
+        contact = await tx.contact.create({
+          data: {
+            name: payload.contactPhone,
+            phone_e164: payload.contactPhone,
+            tags: []
+          }
+        });
+      }
+
+      let conversation = await tx.conversation.findFirst({
+        where: {
+          contactId: contact.id,
+          channel: 'whatsapp'
+        }
+      });
+
+      if (!conversation) {
+        conversation = await tx.conversation.create({
+          data: {
+            contactId: contact.id,
+            channel: 'whatsapp',
+            status: 'open'
+          }
+        });
+      } else {
+        conversation = await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { updatedAt: now }
+        });
+      }
+
+      const message = await tx.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'in',
+          channel: 'whatsapp',
+          body: payload.body,
+          body_original: payload.body,
+          status: 'received',
+          deliveredAt: now
+        }
+      });
+
+      return {
+        conversationId: conversation.id,
+        message
+      };
+    });
   }
 }

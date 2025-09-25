@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -87,7 +88,10 @@ export class ContactsService {
           country: dto.country,
           timezone: dto.timezone,
           tags: tags ?? [],
-          consent: dto.consent ?? undefined
+          consent:
+            dto.consent !== undefined
+              ? (dto.consent as Prisma.InputJsonValue)
+              : undefined
         },
         include: CONTACT_INCLUDE
       });
@@ -116,7 +120,9 @@ export class ContactsService {
       ...(dto.country !== undefined ? { country: dto.country } : {}),
       ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
       ...(tags !== undefined ? { tags } : {}),
-      ...(dto.consent !== undefined ? { consent: dto.consent } : {})
+      ...(dto.consent !== undefined
+        ? { consent: dto.consent as Prisma.InputJsonValue }
+        : {})
     };
 
     return this.prisma.contact.update({
@@ -187,7 +193,7 @@ export class ContactsService {
     await this.prisma.$transaction([
       this.prisma.contact.update({
         where: { id },
-        data: { consent: nextConsent }
+        data: { consent: nextConsent as Prisma.InputJsonValue }
       }),
       this.prisma.consentLog.create({
         data: {
