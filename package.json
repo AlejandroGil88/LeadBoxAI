@@ -1,0 +1,14 @@
+{
+  "name": "leadboxai",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@8.15.4",
+  "scripts": {
+    "dev": "pnpm --filter web --filter api --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "seed": "pnpm --filter api seed",
+    "postinstall": "pnpm -r postinstall"
+  }
+}
