@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { AutomationsService } from './automations.service';
+import { CreateAutomationDto } from './dto/create-automation.dto';
+import { ToggleAutomationDto } from './dto/toggle-automation.dto';
 
 @Controller('automations')
 export class AutomationsController {
@@ -11,12 +13,12 @@ export class AutomationsController {
   }
 
   @Post()
-  create(@Body() payload: any) {
-    return this.automationsService.create(payload);
+  create(@Body() dto: CreateAutomationDto) {
+    return this.automationsService.create(dto);
   }
 
   @Patch(':id/toggle')
-  toggle(@Param('id') id: string, @Body('isActive') isActive: boolean) {
-    return this.automationsService.toggle(id, isActive);
+  toggle(@Param('id') id: string, @Body() body: ToggleAutomationDto) {
+    return this.automationsService.toggle(id, body.isActive);
   }
 }

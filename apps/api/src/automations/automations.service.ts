@@ -1,26 +1,41 @@
-import { Injectable } from '@nestjs/common';
-
-const automations = [
-  {
-    id: 'auto_1',
-    name: 'Recordatorio 24h sin respuesta',
-    trigger: { event: 'no_response', afterMinutes: 1440 },
-    actions: [{ type: 'notify', channel: 'internal' }],
-    isActive: true
-  }
-];
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateAutomationDto } from './dto/create-automation.dto';
 
 @Injectable()
 export class AutomationsService {
+  constructor(private readonly prisma: PrismaService) {}
+
   findAll() {
-    return automations;
+    return this.prisma.automation.findMany({
+      orderBy: { name: 'asc' }
+    });
   }
 
-  create(payload: any) {
-    return { id: `auto_${Date.now()}`, ...payload };
+  async create(dto: CreateAutomationDto) {
+    const trigger = JSON.parse(JSON.stringify(dto.trigger));
+    const actions = JSON.parse(JSON.stringify(dto.actions));
+
+    return this.prisma.automation.create({
+      data: {
+        name: dto.name,
+        trigger,
+        actions,
+        isActive: dto.isActive ?? true
+      }
+    });
   }
 
-  toggle(id: string, isActive: boolean) {
-    return { id, isActive };
+  async toggle(id: string, isActive: boolean) {
+    const automation = await this.prisma.automation.findUnique({ where: { id } });
+
+    if (!automation) {
+      throw new NotFoundException(`Automation ${id} not found`);
+    }
+
+    return this.prisma.automation.update({
+      where: { id },
+      data: { isActive }
+    });
   }
 }
