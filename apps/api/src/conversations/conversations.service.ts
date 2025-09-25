@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { SeedMessageDto } from './dto/seed-message.dto';
@@ -56,10 +57,13 @@ export class ConversationsService {
       this.prisma.conversation.count()
     ]);
 
-    const data = rows.map(({ messages, ...conversation }) => ({
-      ...conversation,
-      lastMessage: messages[0] ?? null
-    }));
+    const data = rows.map((conversation: (typeof rows)[number]) => {
+      const { messages, ...rest } = conversation;
+      return {
+        ...rest,
+        lastMessage: messages[0] ?? null
+      };
+    });
 
     return {
       data,
@@ -92,7 +96,7 @@ export class ConversationsService {
   async seedMessage(payload: SeedMessageDto) {
     const now = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       let contact = await tx.contact.findUnique({
         where: { phone_e164: payload.contactPhone }
       });
